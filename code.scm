@@ -22,59 +22,63 @@
    (else
     (get-leaves (cdr tree)))))
 
+
+;; Returns the tree you get by following path
+;; note that nothing from path is in it, so if
+;; you are searching with "eng" you would get
+;; "lish" for "english", also note that 'path
+;; should be a char list and not a string, this
+;; should probably be fixed
+(define (get-subtree path tree)
+  (cond
+   ((null? path) tree)
+   ((null? tree) #f)
+   ((not (list? (car tree)))
+    tree)
+   (else
+    (call/cc
+     (lambda (return)
+       (for-each
+        (lambda (branch)
+          (when (eqv? (car branch)
+                      (car path))
+                (return (get-subtree (cdr path)
+                                     (cdr branch)))))
+        tree)
+       (return #f))))))
+
 ;; Takes a word tree and add a new word to it
 ;; can currently only have two top level letters
+;; This fails if str is an empty string
+;; also fails if you try to add a string already added
 (define (add-leaf str tree)
   (define (inner path sub-tree)
-    ;(format #t "~s\n" path)
-    (if (not (list? (car sub-tree)))
-        (if (eqv? (car sub-tree)
-                  (car path))
-            (cons (car sub-tree)
-                  (inner (cdr path)
-                         (cdr sub-tree)))
-            ;; possibly sort this in alphabetical order
-            (list sub-tree
-                  (append path `(leaf ,str))))
-        (map (lambda (branch)
-               (if (eqv? (car path)
-                         (car branch))
-                   (cons (car branch)
-                         (inner (cdr path)
-                                (cdr branch)))
-                   branch))
-             sub-tree)))
-  ;; The check for empty trees is only used when creating a new tree
-  ;; It should possibly also be moved somewhere else, and utilize
-  ;; early return features
-  (if (null? tree)
-      (append (string->list (string-downcase str)) `(leaf ,str))
-      (inner (string->list (string-downcase str)) tree)))
-
-(fold add-leaf
-      '()
-      '(;"10th"
-        ;"1st"
-        ;"2"
-        ;"2nd"
-        "Hi"
-        "Hello"
-        "Hejsan"
-        "Orm"
-        "Orelaterat"
-        "Meme"
-        ))
-
-(pretty-print $26)
-
-;; a better stream library might be srfi-43
-(use-modules (ice-9 streams)
-             (ice-9 rdelim))
-(define english-tree
-  (fold add-leaf
-        '()
-        (port->stream (open-input-file "/home/hugo/other/english-words.txt") read-line)))
-(stream-fold add-leaf
-             '()
-             (port->stream (open-input-file "/home/hugo/other/english-words.txt") read-line))
-
+    (cond
+     ((null? tree)
+      (append path `(leaf ,str)))
+     ((not (list? (car sub-tree)))
+      (if (eqv? (car sub-tree)
+                (car path))
+          (cons (car sub-tree)
+                (inner (cdr path)
+                      (cdr sub-tree)))
+          ;; Possibly sort this in alphabetical order.
+          ;; Since that would would allow lookups in O(log n)
+          ;; instead of O(n). But it actually doesn't matter
+          ;; since this list never ought to be longer than
+          ;; 40 items
+          (list sub-tree
+                (append path `(leaf ,str)))))
+     ((not (memv (car path) (map car sub-tree)))
+      (cons (append path `(leaf ,str))
+            sub-tree))
+     (else
+      (map (lambda (branch)
+             (if (eqv? (car path)
+                       (car branch))
+                 (cons (car branch)
+                       (inner (cdr path)
+                              (cdr branch)))
+                 branch))
+           sub-tree))))
+      (inner (string->list (string-downcase str)) tree));)
